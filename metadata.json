@@ -1,0 +1,6 @@
+{
+  "name": "AI Voice & Code Studio",
+  "description": "Multimodal AI assistant with real-time voice and text input, specialized for code generation, debugging, and general everyday inquiries powered by Gemini.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
