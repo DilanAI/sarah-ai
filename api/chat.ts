@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { messages, mode, model = 'gemini-2.5-flash', codeLanguage } = req.body;
+    const { messages, mode, model = 'gemini-3.6-flash', codeLanguage } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Invalid request: messages array required' });
@@ -44,11 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parts: [{ text: m.content }],
     }));
 
-    // Choose valid gemini model
-    const actualModel = model.includes('3.8') || model.includes('3.6') ? 'gemini-2.5-flash' : model;
+    // Always target gemini-3.6-flash
+    const targetModel = model && !model.includes('2.5') ? model : 'gemini-3.6-flash';
 
     const stream = await ai.models.generateContentStream({
-      model: actualModel,
+      model: targetModel,
       contents,
       config: {
         systemInstruction,
