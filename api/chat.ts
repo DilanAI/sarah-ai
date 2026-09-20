@@ -14,13 +14,20 @@ function getAIClient(): GoogleGenAI {
   return aiClient;
 }
 
+// Active and stable models on Google GenAI API
+const ACTIVE_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.6-flash'
+];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    const { messages, mode, model = 'gemini-3.6-flash', codeLanguage } = req.body;
+    const { messages, mode, model, codeLanguage } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Invalid request: messages array required' });
@@ -28,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const ai = getAIClient();
 
-    // Set streaming headers
+    // Set streaming headers for Server-Sent Events
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -38,23 +45,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `You are Sarah, an elite senior software architect and coding assistant. Preferred language: ${codeLanguage || 'TypeScript'}. Provide clean, modern, fully functional code.`
         : 'You are Sarah, a warm, highly intelligent, friendly AI voice and conversational assistant.';
 
-    // Format chat contents
+    // Map messages to Gemini SDK contents format
     const contents = messages.map((m: any) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
 
-    // Always target gemini-3.6-flash
-    const targetModel = model && !model.includes('2.5') ? model : 'gemini-3.6-flash';
+    // Prioritize models that are active
+    const candidateList = [
+      ...ACTIVE_MODELS
+    ];
 
-    const stream = await ai.models.generateContentStream({
-      model: targetModel,
-      contents,
-      config: {
-        systemInstruction,
-      },
-    });
+    let stream = null;
+    let lastError: any = null;
 
+    for (const targetModel of candidateList) {
+      try {
+        stream = await ai.models.generateContentStream({
+          model: targetModel,
+          contents,
+          config: {
+            systemInstruction,
+          },
+        });
+        // Succeeded connecting to stream
+        break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Model ${targetModel} attempt failed: ${err.message}. Trying next candidate...`);
+        continue;
+      }
+    }
+
+    if (!stream) {
+      throw lastError || new Error('All model attempts failed or are temporarily unavailable.');
+    }
+
+    // Stream chunks back to client
     for await (const chunk of stream) {
       if (chunk.text) {
         res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
